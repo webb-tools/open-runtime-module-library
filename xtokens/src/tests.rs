@@ -381,7 +381,7 @@ fn send_as_sovereign() {
 		relay::System::events().iter().any(|r| {
 			matches!(
 				r.event,
-				relay::Event::System(frame_system::Event::<relay::Runtime>::Remarked(_, _))
+				relay::Event::System(frame_system::Event::<relay::Runtime>::Remarked { .. })
 			)
 		});
 	})
