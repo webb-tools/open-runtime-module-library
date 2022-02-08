@@ -126,6 +126,7 @@ impl pallet_treasury::Config for Runtime {
 	type SpendFunds = ();
 	type WeightInfo = ();
 	type MaxApprovals = MaxApprovals;
+	type ProposalBondMaximum = ();
 }
 
 thread_local! {
