@@ -1,32 +1,26 @@
-use super::{Amount, Balance, CurrencyId, CurrencyIdConvert, ParachainXcmRouter, ALICE};
+use super::{Amount, Balance, CurrencyId, CurrencyIdConvert, ParachainXcmRouter};
 use crate as orml_xtokens;
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{Everything, Get},
+	traits::{Everything, Get, Nothing},
 	weights::{constants::WEIGHT_PER_SECOND, Weight},
 };
 use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{Convert, IdentityLookup},
+	traits::{Convert, IdentityLookup, Zero},
 	AccountId32,
 };
 
 use cumulus_primitives_core::{ChannelStatus, GetChannelInfo, ParaId};
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain::primitives::Sibling;
-use xcm::v0::{
-	Error as XcmError,
-	Junction::{self, Parachain, Parent},
-	MultiAsset,
-	MultiLocation::{self, X1, X2},
-	NetworkId,
-};
+use xcm::latest::prelude::*;
 use xcm_builder::{
 	AccountId32Aliases, AllowTopLevelPaidExecutionFrom, EnsureXcmOrigin, FixedWeightBounds, LocationInverter,
-	ParentIsDefault, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
+	ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
 	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
 };
 use xcm_executor::{traits::WeightTrader, Assets, Config, XcmExecutor};
@@ -64,6 +58,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {
@@ -99,7 +94,7 @@ impl orml_tokens::Config for Runtime {
 	type ExistentialDeposits = ExistentialDeposits;
 	type OnDust = ();
 	type MaxLocks = MaxLocks;
-	type DustRemovalWhitelist = ();
+	type DustRemovalWhitelist = Everything;
 }
 
 parameter_types! {
@@ -110,14 +105,14 @@ parameter_types! {
 impl parachain_info::Config for Runtime {}
 
 parameter_types! {
-	pub const RelayLocation: MultiLocation = MultiLocation::X1(Parent);
+	pub const RelayLocation: MultiLocation = MultiLocation::parent();
 	pub const RelayNetwork: NetworkId = NetworkId::Kusama;
 	pub RelayChainOrigin: Origin = cumulus_pallet_xcm::Origin::Relay.into();
 	pub Ancestry: MultiLocation = Parachain(ParachainInfo::parachain_id().into()).into();
 }
 
 pub type LocationToAccountId = (
-	ParentIsDefault<AccountId>,
+	ParentIsPreset<AccountId>,
 	SiblingParachainConvertsVia<Sibling, AccountId>,
 	AccountId32Aliases<RelayNetwork, AccountId>,
 );
@@ -132,6 +127,7 @@ pub type XcmOriginToCallOrigin = (
 
 parameter_types! {
 	pub const UnitWeightCost: Weight = 10;
+	pub const MaxInstructions: u32 = 100;
 }
 
 pub type LocalAssetTransactor = MultiCurrencyAdapter<
@@ -142,6 +138,7 @@ pub type LocalAssetTransactor = MultiCurrencyAdapter<
 	LocationToAccountId,
 	CurrencyId,
 	CurrencyIdConvert,
+	(),
 >;
 
 pub type XcmRouter = ParachainXcmRouter<ParachainInfo>;
@@ -154,7 +151,7 @@ pub type Barrier = (TakeWeightCredit, AllowTopLevelPaidExecutionFrom<Everything>
 pub struct AllTokensAreCreatedEqualToWeight(MultiLocation);
 impl WeightTrader for AllTokensAreCreatedEqualToWeight {
 	fn new() -> Self {
-		Self(MultiLocation::Null)
+		Self(MultiLocation::parent())
 	}
 
 	fn buy_weight(&mut self, weight: Weight, payment: Assets) -> Result<Assets, XcmError> {
@@ -164,20 +161,28 @@ impl WeightTrader for AllTokensAreCreatedEqualToWeight {
 			.next()
 			.expect("Payment must be something; qed")
 			.0;
-		let required = asset_id.clone().into_fungible_multiasset(weight as u128);
+		let required = MultiAsset {
+			id: asset_id.clone(),
+			fun: Fungible(weight as u128),
+		};
 
-		if let MultiAsset::ConcreteFungible { ref id, amount: _ } = required {
+		if let MultiAsset {
+			fun: _,
+			id: Concrete(ref id),
+		} = &required
+		{
 			self.0 = id.clone();
 		}
 
-		let (unused, _) = payment.less(required).map_err(|_| XcmError::TooExpensive)?;
+		let unused = payment.checked_sub(required).map_err(|_| XcmError::TooExpensive)?;
 		Ok(unused)
 	}
 
-	fn refund_weight(&mut self, weight: Weight) -> MultiAsset {
-		MultiAsset::ConcreteFungible {
-			id: self.0.clone(),
-			amount: weight as u128,
+	fn refund_weight(&mut self, weight: Weight) -> Option<MultiAsset> {
+		if weight.is_zero() {
+			None
+		} else {
+			Some((self.0.clone(), weight as u128).into())
 		}
 	}
 }
@@ -192,9 +197,12 @@ impl Config for XcmConfig {
 	type IsTeleporter = ();
 	type LocationInverter = LocationInverter<Ancestry>;
 	type Barrier = Barrier;
-	type Weigher = FixedWeightBounds<UnitWeightCost, Call>;
+	type Weigher = FixedWeightBounds<UnitWeightCost, Call, MaxInstructions>;
 	type Trader = AllTokensAreCreatedEqualToWeight;
 	type ResponseHandler = ();
+	type AssetTrap = PolkadotXcm;
+	type AssetClaims = PolkadotXcm;
+	type SubscriptionService = PolkadotXcm;
 }
 
 pub struct ChannelInfo;
@@ -211,6 +219,10 @@ impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type Event = Event;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
 	type ChannelInfo = ChannelInfo;
+	type VersionWrapper = ();
+	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
+	type ControllerOrigin = EnsureRoot<AccountId>;
+	type ControllerOriginConverter = XcmOriginToCallOrigin;
 }
 
 impl cumulus_pallet_dmp_queue::Config for Runtime {
@@ -233,10 +245,14 @@ impl pallet_xcm::Config for Runtime {
 	type ExecuteXcmOrigin = EnsureXcmOrigin<Origin, LocalOriginToLocation>;
 	type XcmExecuteFilter = Everything;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type XcmTeleportFilter = ();
+	type XcmTeleportFilter = Nothing;
 	type XcmReserveTransferFilter = Everything;
-	type Weigher = FixedWeightBounds<UnitWeightCost, Call>;
+	type Weigher = FixedWeightBounds<UnitWeightCost, Call, MaxInstructions>;
 	type LocationInverter = LocationInverter<Ancestry>;
+	type Origin = Origin;
+	type Call = Call;
+	const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
+	type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
 }
 
 pub struct AccountIdToMultiLocation;
@@ -246,12 +262,24 @@ impl Convert<AccountId, MultiLocation> for AccountIdToMultiLocation {
 			network: NetworkId::Any,
 			id: account.into(),
 		})
+		.into()
 	}
 }
 
 parameter_types! {
-	pub SelfLocation: MultiLocation = X2(Parent, Parachain(ParachainInfo::get().into()));
+	pub SelfLocation: MultiLocation = MultiLocation::new(1, X1(Parachain(ParachainInfo::get().into())));
 	pub const BaseXcmWeight: Weight = 100_000_000;
+	pub const MaxAssetsForTransfer: usize = 3;
+}
+
+parameter_type_with_key! {
+	pub ParachainMinFee: |location: MultiLocation| -> u128 {
+		#[allow(clippy::match_ref_pats)] // false positive
+		match (location.parents, location.first_interior()) {
+			(1, Some(Parachain(2))) => 40,
+			_ => u128::MAX,
+		}
+	};
 }
 
 impl orml_xtokens::Config for Runtime {
@@ -261,9 +289,12 @@ impl orml_xtokens::Config for Runtime {
 	type CurrencyIdConvert = CurrencyIdConvert;
 	type AccountIdToMultiLocation = AccountIdToMultiLocation;
 	type SelfLocation = SelfLocation;
+	type MinXcmFee = ParachainMinFee;
 	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type Weigher = FixedWeightBounds<UnitWeightCost, Call>;
+	type Weigher = FixedWeightBounds<UnitWeightCost, Call, MaxInstructions>;
 	type BaseXcmWeight = BaseXcmWeight;
+	type LocationInverter = LocationInverter<Ancestry>;
+	type MaxAssetsForTransfer = MaxAssetsForTransfer;
 }
 
 impl orml_xcm::Config for Runtime {

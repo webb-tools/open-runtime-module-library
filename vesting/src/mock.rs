@@ -3,7 +3,10 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{construct_runtime, parameter_types, traits::EnsureOrigin};
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{EnsureOrigin, Everything},
+};
 use frame_system::RawOrigin;
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
@@ -39,6 +42,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 type Balance = u64;
@@ -73,7 +77,9 @@ impl EnsureOrigin<Origin> for EnsureAliceOrBob {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> Origin {
-		Origin::from(RawOrigin::Signed(Default::default()))
+		let zero_account_id = AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+			.expect("infinite length input; no invalid inputs for type; qed");
+		Origin::from(RawOrigin::Signed(zero_account_id))
 	}
 }
 
@@ -130,13 +136,17 @@ impl ExtBuilder {
 			.unwrap();
 
 		pallet_balances::GenesisConfig::<Runtime> {
-			balances: vec![(ALICE, 100), (CHARLIE, 30)],
+			balances: vec![(ALICE, 100), (CHARLIE, 50)],
 		}
 		.assimilate_storage(&mut t)
 		.unwrap();
 
 		vesting::GenesisConfig::<Runtime> {
-			vesting: vec![(CHARLIE, 2, 3, 4, 5)], // who, start, period, period_count, per_period
+			vesting: vec![
+				// who, start, period, period_count, per_period
+				(CHARLIE, 2, 3, 1, 5),
+				(CHARLIE, 2 + 3, 3, 3, 5),
+			],
 		}
 		.assimilate_storage(&mut t)
 		.unwrap();

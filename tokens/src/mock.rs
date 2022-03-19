@@ -6,7 +6,7 @@ use super::*;
 use frame_support::traits::Everything;
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{ChangeMembers, ContainsLengthBound, GenesisBuild, SaturatingCurrencyToVote, SortedMembers},
+	traits::{ChangeMembers, ContainsLengthBound, Everything, GenesisBuild, SaturatingCurrencyToVote, SortedMembers},
 	PalletId,
 };
 use orml_traits::parameter_type_with_key;
@@ -64,6 +64,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 thread_local! {
@@ -103,6 +104,7 @@ impl ContainsLengthBound for TenToFourteen {
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const ProposalBondMinimum: u64 = 1;
+	pub const ProposalBondMaximum: u64 = 5;
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
@@ -119,6 +121,7 @@ impl pallet_treasury::Config for Runtime {
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
+	type ProposalBondMaximum = ProposalBondMaximum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
 	type BurnDestination = ();

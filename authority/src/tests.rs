@@ -18,8 +18,8 @@ use sp_runtime::{traits::BadOrigin, Perbill};
 #[test]
 fn dispatch_as_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let ensure_signed_call = Call::System(frame_system::Call::remark(vec![]));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let ensure_signed_call = Call::System(frame_system::Call::remark { remark: vec![] });
 		assert_ok!(Authority::dispatch_as(
 			Origin::root(),
 			MockAsOriginId::Root,
@@ -57,11 +57,11 @@ fn dispatch_as_work() {
 #[test]
 fn schedule_dispatch_at_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		run_to_block(1);
 		assert_eq!(
 			Authority::schedule_dispatch(Origin::root(), DispatchTime::At(1), 0, true, Box::new(call.clone())),
@@ -75,20 +75,20 @@ fn schedule_dispatch_at_work() {
 			true,
 			Box::new(call.clone())
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			1,
-		)));
+			index: 1,
+		}));
 
 		run_to_block(2);
-		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched(
-			(2, 0),
-			Some([1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0].to_vec()),
-			Ok(()),
-		)));
+		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched {
+			task: (2, 0),
+			id: Some([1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0].to_vec()),
+			result: Ok(()),
+		}));
 
 		// with_delayed_origin = false
 		assert_ok!(Authority::schedule_dispatch(
@@ -98,28 +98,28 @@ fn schedule_dispatch_at_work() {
 			false,
 			Box::new(call)
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::system(RawOrigin::Root),
-			2,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 2,
+		}));
 
 		run_to_block(3);
-		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched(
-			(3, 0),
-			Some([0, 0, 2, 0, 0, 0].to_vec()),
-			Ok(()),
-		)));
+		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched {
+			task: (3, 0),
+			id: Some([0, 0, 2, 0, 0, 0].to_vec()),
+			result: Ok(()),
+		}));
 	});
 }
 
 #[test]
 fn schedule_dispatch_after_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		run_to_block(1);
 		assert_eq!(
 			Authority::schedule_dispatch(Origin::root(), DispatchTime::At(0), 0, true, Box::new(call.clone())),
@@ -133,20 +133,20 @@ fn schedule_dispatch_after_work() {
 			true,
 			Box::new(call.clone())
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 0,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			1,
-		)));
+			index: 1,
+		}));
 
 		run_to_block(2);
-		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched(
-			(2, 0),
-			Some([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0].to_vec()),
-			Ok(()),
-		)));
+		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched {
+			task: (2, 0),
+			id: Some([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0].to_vec()),
+			result: Ok(()),
+		}));
 
 		// with_delayed_origin = false
 		assert_ok!(Authority::schedule_dispatch(
@@ -156,17 +156,17 @@ fn schedule_dispatch_after_work() {
 			false,
 			Box::new(call)
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::system(RawOrigin::Root),
-			2,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 2,
+		}));
 
 		run_to_block(3);
-		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched(
-			(3, 0),
-			Some([0, 0, 2, 0, 0, 0].to_vec()),
-			Ok(()),
-		)));
+		System::assert_last_event(mock::Event::Scheduler(pallet_scheduler::Event::<Runtime>::Dispatched {
+			task: (3, 0),
+			id: Some([0, 0, 2, 0, 0, 0].to_vec()),
+			result: Ok(()),
+		}));
 	});
 }
 
@@ -174,11 +174,11 @@ fn schedule_dispatch_after_work() {
 fn fast_track_scheduled_dispatch_work() {
 	ExtBuilder::default().build().execute_with(|| {
 		System::set_block_number(1);
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		run_to_block(1);
 		assert_ok!(Authority::schedule_dispatch(
 			Origin::root(),
@@ -187,13 +187,13 @@ fn fast_track_scheduled_dispatch_work() {
 			true,
 			Box::new(call.clone())
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			0,
-		)));
+			index: 0,
+		}));
 
 		let schedule_origin = {
 			let origin: <Runtime as Config>::Origin = Origin::root();
@@ -212,14 +212,14 @@ fn fast_track_scheduled_dispatch_work() {
 			0,
 			DispatchTime::At(4),
 		));
-		System::assert_last_event(mock::Event::Authority(Event::FastTracked(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::FastTracked {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			0,
-			4,
-		)));
+			index: 0,
+			when: 4,
+		}));
 
 		assert_ok!(Authority::schedule_dispatch(
 			Origin::root(),
@@ -228,10 +228,10 @@ fn fast_track_scheduled_dispatch_work() {
 			false,
 			Box::new(call)
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::system(RawOrigin::Root),
-			1,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 1,
+		}));
 
 		assert_ok!(Authority::fast_track_scheduled_dispatch(
 			Origin::root(),
@@ -239,11 +239,11 @@ fn fast_track_scheduled_dispatch_work() {
 			1,
 			DispatchTime::At(4),
 		));
-		System::assert_last_event(mock::Event::Authority(Event::FastTracked(
-			OriginCaller::system(RawOrigin::Root),
-			1,
-			4,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::FastTracked {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 1,
+			when: 4,
+		}));
 	});
 }
 
@@ -251,11 +251,11 @@ fn fast_track_scheduled_dispatch_work() {
 fn delay_scheduled_dispatch_work() {
 	ExtBuilder::default().build().execute_with(|| {
 		System::set_block_number(1);
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		run_to_block(1);
 		assert_ok!(Authority::schedule_dispatch(
 			Origin::root(),
@@ -264,13 +264,13 @@ fn delay_scheduled_dispatch_work() {
 			true,
 			Box::new(call.clone())
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			0,
-		)));
+			index: 0,
+		}));
 
 		let schedule_origin = {
 			let origin: <Runtime as Config>::Origin = Origin::root();
@@ -289,14 +289,14 @@ fn delay_scheduled_dispatch_work() {
 			0,
 			4,
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Delayed(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Delayed {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			0,
-			5,
-		)));
+			index: 0,
+			when: 5,
+		}));
 
 		assert_ok!(Authority::schedule_dispatch(
 			Origin::root(),
@@ -305,10 +305,10 @@ fn delay_scheduled_dispatch_work() {
 			false,
 			Box::new(call)
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::system(RawOrigin::Root),
-			1,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 1,
+		}));
 
 		assert_ok!(Authority::delay_scheduled_dispatch(
 			Origin::root(),
@@ -316,22 +316,22 @@ fn delay_scheduled_dispatch_work() {
 			1,
 			4,
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Delayed(
-			OriginCaller::system(RawOrigin::Root),
-			1,
-			5,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Delayed {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 1,
+			when: 5,
+		}));
 	});
 }
 
 #[test]
 fn cancel_scheduled_dispatch_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		run_to_block(1);
 		assert_ok!(Authority::schedule_dispatch(
 			Origin::root(),
@@ -340,13 +340,13 @@ fn cancel_scheduled_dispatch_work() {
 			true,
 			Box::new(call.clone())
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			0,
-		)));
+			index: 0,
+		}));
 
 		let schedule_origin = {
 			let origin: <Runtime as Config>::Origin = Origin::root();
@@ -364,13 +364,13 @@ fn cancel_scheduled_dispatch_work() {
 			Box::new(pallets_origin),
 			0
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Cancelled(
-			OriginCaller::Authority(DelayedOrigin {
+		System::assert_last_event(mock::Event::Authority(Event::Cancelled {
+			origin: OriginCaller::Authority(DelayedOrigin {
 				delay: 1,
 				origin: Box::new(OriginCaller::system(RawOrigin::Root)),
 			}),
-			0,
-		)));
+			index: 0,
+		}));
 
 		assert_ok!(Authority::schedule_dispatch(
 			Origin::root(),
@@ -379,20 +379,20 @@ fn cancel_scheduled_dispatch_work() {
 			false,
 			Box::new(call)
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Scheduled(
-			OriginCaller::system(RawOrigin::Root),
-			1,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Scheduled {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 1,
+		}));
 
 		assert_ok!(Authority::cancel_scheduled_dispatch(
 			Origin::root(),
 			Box::new(frame_system::RawOrigin::Root.into()),
 			1
 		));
-		System::assert_last_event(mock::Event::Authority(Event::Cancelled(
-			OriginCaller::system(RawOrigin::Root),
-			1,
-		)));
+		System::assert_last_event(mock::Event::Authority(Event::Cancelled {
+			origin: OriginCaller::system(RawOrigin::Root),
+			index: 1,
+		}));
 	});
 }
 
@@ -410,17 +410,17 @@ fn call_size_limit() {
 fn authorize_call_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		run_to_block(1);
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		let hash = <Runtime as frame_system::Config>::Hashing::hash_of(&call);
 
 		// works without account
 		assert_ok!(Authority::authorize_call(Origin::root(), Box::new(call.clone()), None));
 		assert_eq!(Authority::saved_calls(&hash), Some((call.clone(), None)));
-		System::assert_last_event(mock::Event::Authority(Event::AuthorizedCall(hash, None)));
+		System::assert_last_event(mock::Event::Authority(Event::AuthorizedCall { hash, caller: None }));
 
 		// works with account
 		assert_ok!(Authority::authorize_call(
@@ -429,7 +429,7 @@ fn authorize_call_works() {
 			Some(1)
 		));
 		assert_eq!(Authority::saved_calls(&hash), Some((call.clone(), Some(1))));
-		System::assert_last_event(mock::Event::Authority(Event::AuthorizedCall(hash, Some(1))));
+		System::assert_last_event(mock::Event::Authority(Event::AuthorizedCall { hash, caller: Some(1) }));
 	});
 }
 
@@ -437,11 +437,11 @@ fn authorize_call_works() {
 fn trigger_call_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		run_to_block(1);
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		let hash = <Runtime as frame_system::Config>::Hashing::hash_of(&call);
 
 		let call_weight_bound = call.get_dispatch_info().weight;
@@ -463,8 +463,8 @@ fn trigger_call_works() {
 		// works without caller
 		assert_ok!(Authority::trigger_call(Origin::signed(1), hash, call_weight_bound));
 		assert_eq!(Authority::saved_calls(&hash), None);
-		System::assert_has_event(mock::Event::Authority(Event::TriggeredCallBy(hash, 1)));
-		System::assert_last_event(mock::Event::Authority(Event::Dispatched(Ok(()))));
+		System::assert_has_event(mock::Event::Authority(Event::TriggeredCallBy { hash, caller: 1 }));
+		System::assert_last_event(mock::Event::Authority(Event::Dispatched { result: Ok(()) }));
 
 		// works with caller 1
 		assert_ok!(Authority::authorize_call(
@@ -482,8 +482,8 @@ fn trigger_call_works() {
 		// caller 1 triggering the call
 		assert_ok!(Authority::trigger_call(Origin::signed(1), hash, call_weight_bound));
 		assert_eq!(Authority::saved_calls(&hash), None);
-		System::assert_has_event(mock::Event::Authority(Event::TriggeredCallBy(hash, 1)));
-		System::assert_last_event(mock::Event::Authority(Event::Dispatched(Ok(()))));
+		System::assert_has_event(mock::Event::Authority(Event::TriggeredCallBy { hash, caller: 1 }));
+		System::assert_last_event(mock::Event::Authority(Event::Dispatched { result: Ok(()) }));
 	});
 }
 
@@ -491,11 +491,11 @@ fn trigger_call_works() {
 fn remove_authorized_call_works() {
 	ExtBuilder::default().build().execute_with(|| {
 		run_to_block(1);
-		let ensure_root_call = Call::System(frame_system::Call::fill_block(Perbill::one()));
-		let call = Call::Authority(authority::Call::dispatch_as(
-			MockAsOriginId::Root,
-			Box::new(ensure_root_call),
-		));
+		let ensure_root_call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
+		let call = Call::Authority(authority::Call::dispatch_as {
+			as_origin: MockAsOriginId::Root,
+			call: Box::new(ensure_root_call),
+		});
 		let hash = <Runtime as frame_system::Config>::Hashing::hash_of(&call);
 
 		assert_noop!(
@@ -538,10 +538,13 @@ fn remove_authorized_call_works() {
 #[test]
 fn trigger_call_should_be_free_and_operational() {
 	ExtBuilder::default().build().execute_with(|| {
-		let call = Call::System(frame_system::Call::fill_block(Perbill::one()));
+		let call = Call::System(frame_system::Call::fill_block { ratio: Perbill::one() });
 		let hash = <Runtime as frame_system::Config>::Hashing::hash_of(&call);
 		let call_weight_bound = call.get_dispatch_info().weight;
-		let trigger_call = Call::Authority(authority::Call::trigger_call(hash, call_weight_bound));
+		let trigger_call = Call::Authority(authority::Call::trigger_call {
+			hash,
+			call_weight_bound,
+		});
 
 		assert_ok!(Authority::authorize_call(Origin::root(), Box::new(call), Some(1)));
 

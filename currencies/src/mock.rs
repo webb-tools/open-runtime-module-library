@@ -3,9 +3,11 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::traits::Everything;
-use frame_support::traits::Nothing;
-use frame_support::{construct_runtime, parameter_types, PalletId};
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{Everything, Nothing},
+	PalletId,
+};
 use orml_traits::parameter_type_with_key;
 use sp_core::H256;
 use sp_runtime::{
@@ -45,13 +47,14 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 type CurrencyId = u32;
 type Balance = u64;
 
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	pub const ExistentialDeposit: u64 = 2;
 }
 
 impl pallet_balances::Config for Runtime {

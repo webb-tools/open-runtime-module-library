@@ -8,6 +8,7 @@ pub mod test_module {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -130,6 +131,7 @@ pub mod test_module {
 }
 
 use frame_support::sp_runtime::traits::IdentityLookup;
+use frame_support::traits::Everything;
 use sp_runtime::testing::{Header, H256};
 
 pub type BlockNumber = u64;
@@ -166,6 +168,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 frame_support::parameter_types! {
