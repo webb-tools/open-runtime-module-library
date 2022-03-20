@@ -35,7 +35,7 @@ pub mod multi_asset;
 pub mod nft;
 pub mod price;
 pub mod rewards;
-// pub mod xcm_transfer;
+pub mod xcm_transfer;
 
 /// New data handler
 #[impl_trait_for_tuples::impl_for_tuples(30)]

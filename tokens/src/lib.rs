@@ -69,7 +69,6 @@ use orml_traits::{
 	BalanceStatus, GetByKey, LockIdentifier, MultiCurrency, MultiCurrencyExtended, MultiLockableCurrency,
 	MultiReservableCurrency, OnDust,
 };
-use scale_info::TypeInfo;
 
 mod imbalances;
 mod impls;
