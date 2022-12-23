@@ -1701,6 +1701,10 @@ impl<T: Config> fungibles::Inspect<T::AccountId> for Pallet<T> {
 	type AssetId = T::CurrencyId;
 	type Balance = T::Balance;
 
+	fn asset_exists(asset_id: Self::AssetId) -> bool {
+		todo!()
+	}
+
 	fn total_issuance(asset_id: Self::AssetId) -> Self::Balance {
 		Self::total_issuance(asset_id)
 	}

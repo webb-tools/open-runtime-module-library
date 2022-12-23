@@ -16,6 +16,10 @@ where
 	type AssetId = <B as fungibles::Inspect<AccountId>>::AssetId;
 	type Balance = <B as fungibles::Inspect<AccountId>>::Balance;
 
+	fn asset_exists(asset_id: Self::AssetId) -> bool {
+		todo!()
+	}
+
 	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
 		if TestKey::contains(&asset) {
 			A::total_issuance()
