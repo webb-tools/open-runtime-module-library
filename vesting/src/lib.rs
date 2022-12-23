@@ -32,7 +32,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	traits::{Currency, EnsureOrigin, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, WithdrawReasons},
-	transactional, BoundedVec,
+	BoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use scale_info::TypeInfo;
@@ -59,7 +59,7 @@ pub const VESTING_LOCK_ID: LockIdentifier = *b"ormlvest";
 /// Benefits would be granted gradually, `per_period` amount every `period`
 /// of blocks after `start`.
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub struct VestingSchedule<BlockNumber, Balance: HasCompact> {
+pub struct VestingSchedule<BlockNumber, Balance: MaxEncodedLen + HasCompact> {
 	/// Vesting starting block
 	pub start: BlockNumber,
 	/// Number of blocks between vest
@@ -71,7 +71,9 @@ pub struct VestingSchedule<BlockNumber, Balance: HasCompact> {
 	pub per_period: Balance,
 }
 
-impl<BlockNumber: AtLeast32Bit + Copy, Balance: AtLeast32Bit + Copy> VestingSchedule<BlockNumber, Balance> {
+impl<BlockNumber: AtLeast32Bit + Copy, Balance: AtLeast32Bit + MaxEncodedLen + Copy>
+	VestingSchedule<BlockNumber, Balance>
+{
 	/// Returns the end of all periods, `None` if calculation overflows.
 	pub fn end(&self) -> Option<BlockNumber> {
 		// period * period_count + start
@@ -121,7 +123,7 @@ pub mod module {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
@@ -130,7 +132,7 @@ pub mod module {
 		type MinVestedTransfer: Get<BalanceOf<Self>>;
 
 		/// Required origin for vested transfer.
-		type VestedTransferOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type VestedTransferOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Weight information for extrinsics in this module.
 		type WeightInfo: WeightInfo;
@@ -217,7 +219,9 @@ pub mod module {
 						.iter()
 						.try_fold::<_, _, Result<BalanceOf<T>, DispatchError>>(Zero::zero(), |acc_amount, schedule| {
 							let amount = ensure_valid_vesting_schedule::<T>(schedule)?;
-							Ok(acc_amount + amount)
+							acc_amount
+								.checked_add(&amount)
+								.ok_or_else(|| ArithmeticError::Overflow.into())
 						})
 						.expect("Invalid vesting schedule");
 
@@ -260,6 +264,14 @@ pub mod module {
 		) -> DispatchResult {
 			let from = T::VestedTransferOrigin::ensure_origin(origin)?;
 			let to = T::Lookup::lookup(dest)?;
+
+			if to == from {
+				ensure!(
+					T::Currency::free_balance(&from) >= schedule.total_amount().ok_or(ArithmeticError::Overflow)?,
+					Error::<T>::InsufficientBalanceToLock,
+				);
+			}
+
 			Self::do_vested_transfer(&from, &to, schedule.clone())?;
 
 			Self::deposit_event(Event::VestingScheduleAdded {
@@ -335,7 +347,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	#[transactional]
 	fn do_vested_transfer(from: &T::AccountId, to: &T::AccountId, schedule: VestingScheduleOf<T>) -> DispatchResult {
 		let schedule_amount = ensure_valid_vesting_schedule::<T>(&schedule)?;
 
@@ -365,7 +376,9 @@ impl<T: Config> Pallet<T> {
 			.iter()
 			.try_fold::<_, _, Result<BalanceOf<T>, DispatchError>>(Zero::zero(), |acc_amount, schedule| {
 				let amount = ensure_valid_vesting_schedule::<T>(schedule)?;
-				Ok(acc_amount + amount)
+				acc_amount
+					.checked_add(&amount)
+					.ok_or_else(|| ArithmeticError::Overflow.into())
 			})?;
 		ensure!(
 			T::Currency::free_balance(who) >= total_amount,

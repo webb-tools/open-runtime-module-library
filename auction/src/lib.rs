@@ -13,11 +13,12 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::unused_unit)]
 
+use codec::MaxEncodedLen;
 use frame_support::pallet_prelude::*;
 use frame_system::{ensure_signed, pallet_prelude::*};
 use orml_traits::{Auction, AuctionHandler, AuctionInfo, Change};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize, Member, One, Zero},
+	traits::{AtLeast32BitUnsigned, Bounded, CheckedAdd, MaybeSerializeDeserialize, Member, One, Zero},
 	DispatchError, DispatchResult,
 };
 
@@ -34,10 +35,16 @@ pub mod module {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The balance type for bidding.
-		type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize;
+		type Balance: Parameter
+			+ Member
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// The auction ID type.
 		type AuctionId: Parameter
@@ -47,7 +54,8 @@ pub mod module {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Bounded
-			+ codec::FullCodec;
+			+ codec::FullCodec
+			+ codec::MaxEncodedLen;
 
 		/// The `AuctionHandler` that allow custom bidding logic and handles
 		/// auction result.
@@ -96,7 +104,6 @@ pub mod module {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -198,8 +205,7 @@ impl<T: Config> Auction<T::AccountId, T::BlockNumber> for Pallet<T> {
 		let auction_id =
 			<AuctionsIndex<T>>::try_mutate(|n| -> sp_std::result::Result<Self::AuctionId, DispatchError> {
 				let id = *n;
-				ensure!(id != Self::AuctionId::max_value(), Error::<T>::NoAvailableAuctionId);
-				*n += One::one();
+				*n = n.checked_add(&One::one()).ok_or(Error::<T>::NoAvailableAuctionId)?;
 				Ok(id)
 			})?;
 		Auctions::<T>::insert(auction_id, auction);

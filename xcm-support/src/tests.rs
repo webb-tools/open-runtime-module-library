@@ -4,7 +4,7 @@
 
 use super::*;
 
-use orml_traits::{location::RelativeLocations, ConcreteFungibleAsset};
+use orml_traits::{location::AbsoluteReserveProvider, location::RelativeLocations, ConcreteFungibleAsset};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TestCurrencyId {
@@ -17,16 +17,14 @@ pub struct CurrencyIdConvert;
 impl Convert<MultiLocation, Option<TestCurrencyId>> for CurrencyIdConvert {
 	fn convert(l: MultiLocation) -> Option<TestCurrencyId> {
 		use TestCurrencyId::*;
-		let token_a: Vec<u8> = "TokenA".into();
-		let token_b: Vec<u8> = "TokenB".into();
 
 		if l == MultiLocation::parent() {
 			return Some(RelayChainToken);
 		}
-		if l == MultiLocation::sibling_parachain_general_key(1, token_a) {
+		if l == MultiLocation::sibling_parachain_general_key(1, b"TokenA".to_vec().try_into().unwrap()) {
 			return Some(TokenA);
 		}
-		if l == MultiLocation::sibling_parachain_general_key(2, token_b) {
+		if l == MultiLocation::sibling_parachain_general_key(2, b"TokenB".to_vec().try_into().unwrap()) {
 			return Some(TokenB);
 		}
 		None
@@ -43,12 +41,20 @@ fn is_native_concrete_matches_native_currencies() {
 	);
 
 	assert_eq!(
-		MatchesCurrencyId::matches_fungible(&MultiAsset::sibling_parachain_asset(1, "TokenA".into(), 100)),
+		MatchesCurrencyId::matches_fungible(&MultiAsset::sibling_parachain_asset(
+			1,
+			b"TokenA".to_vec().try_into().unwrap(),
+			100
+		)),
 		Some(100),
 	);
 
 	assert_eq!(
-		MatchesCurrencyId::matches_fungible(&MultiAsset::sibling_parachain_asset(2, "TokenB".into(), 100)),
+		MatchesCurrencyId::matches_fungible(&MultiAsset::sibling_parachain_asset(
+			2,
+			b"TokenB".to_vec().try_into().unwrap(),
+			100
+		)),
 		Some(100),
 	);
 }
@@ -58,7 +64,7 @@ fn is_native_concrete_does_not_matches_non_native_currencies() {
 	assert!(
 		<MatchesCurrencyId as MatchesFungible<u128>>::matches_fungible(&MultiAsset::sibling_parachain_asset(
 			2,
-			"TokenC".into(),
+			b"TokenC".to_vec().try_into().unwrap(),
 			100
 		))
 		.is_none()
@@ -66,7 +72,7 @@ fn is_native_concrete_does_not_matches_non_native_currencies() {
 	assert!(
 		<MatchesCurrencyId as MatchesFungible<u128>>::matches_fungible(&MultiAsset::sibling_parachain_asset(
 			1,
-			"TokenB".into(),
+			b"TokenB".to_vec().try_into().unwrap(),
 			100
 		))
 		.is_none()
@@ -74,7 +80,10 @@ fn is_native_concrete_does_not_matches_non_native_currencies() {
 	assert!(
 		<MatchesCurrencyId as MatchesFungible<u128>>::matches_fungible(&MultiAsset {
 			fun: Fungible(100),
-			id: Concrete(MultiLocation::new(1, X1(GeneralKey("TokenB".into())))),
+			id: Concrete(MultiLocation::new(
+				1,
+				X1(GeneralKey(b"TokenB".to_vec().try_into().unwrap()))
+			)),
 		})
 		.is_none()
 	);
@@ -82,19 +91,19 @@ fn is_native_concrete_does_not_matches_non_native_currencies() {
 
 #[test]
 fn multi_native_asset() {
-	assert!(MultiNativeAsset::filter_asset_location(
+	assert!(MultiNativeAsset::<AbsoluteReserveProvider>::filter_asset_location(
 		&MultiAsset {
 			fun: Fungible(10),
 			id: Concrete(MultiLocation::parent())
 		},
 		&Parent.into()
 	));
-	assert!(MultiNativeAsset::filter_asset_location(
-		&MultiAsset::sibling_parachain_asset(1, "TokenA".into(), 100),
+	assert!(MultiNativeAsset::<AbsoluteReserveProvider>::filter_asset_location(
+		&MultiAsset::sibling_parachain_asset(1, b"TokenA".to_vec().try_into().unwrap(), 100),
 		&MultiLocation::new(1, X1(Parachain(1))),
 	));
-	assert!(!MultiNativeAsset::filter_asset_location(
-		&MultiAsset::sibling_parachain_asset(1, "TokenA".into(), 100),
+	assert!(!MultiNativeAsset::<AbsoluteReserveProvider>::filter_asset_location(
+		&MultiAsset::sibling_parachain_asset(1, b"TokenA".to_vec().try_into().unwrap(), 100),
 		&MultiLocation::parent(),
 	));
 }

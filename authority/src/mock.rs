@@ -6,7 +6,7 @@ use super::*;
 use codec::{Decode, Encode};
 use frame_support::{
 	parameter_types,
-	traits::{EqualPrivilegeOnly, Everything},
+	traits::{ConstU64, EqualPrivilegeOnly, Everything},
 	weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, EnsureRoot};
@@ -23,24 +23,23 @@ pub type AccountId = u128;
 pub type BlockNumber = u64;
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
+			frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2_000_000_000_000).set_proof_size(u64::MAX));
 }
 
 impl frame_system::Config for Runtime {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type BlockWeights = ();
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -52,26 +51,32 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
+}
+
+impl pallet_preimage::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type Currency = ();
+	type ManagerOrigin = EnsureRoot<u128>;
+	type BaseDeposit = ();
+	type ByteDeposit = ();
 }
 
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-	// Retry a scheduled item every 10 blocks (1 minute) until the preimage exists.
-	pub const NoPreimagePostponement: Option<u64> = Some(10);
 }
 impl pallet_scheduler::Config for Runtime {
-	type Event = Event;
-	type Origin = Origin;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u128>;
-	type MaxScheduledPerBlock = ();
+	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = ();
-	type NoPreimagePostponement = NoPreimagePostponement;
+	type Preimages = Preimage;
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, Ord, PartialOrd, Debug, TypeInfo)]
@@ -83,8 +88,8 @@ pub enum MockAsOriginId {
 
 pub struct AuthorityConfigImpl;
 
-impl AuthorityConfig<Origin, OriginCaller, BlockNumber> for AuthorityConfigImpl {
-	fn check_schedule_dispatch(origin: Origin, _priority: Priority) -> DispatchResult {
+impl AuthorityConfig<RuntimeOrigin, OriginCaller, BlockNumber> for AuthorityConfigImpl {
+	fn check_schedule_dispatch(origin: RuntimeOrigin, _priority: Priority) -> DispatchResult {
 		let origin: Result<frame_system::RawOrigin<u128>, _> = origin.into();
 		match origin {
 			Ok(frame_system::RawOrigin::Root)
@@ -94,14 +99,14 @@ impl AuthorityConfig<Origin, OriginCaller, BlockNumber> for AuthorityConfigImpl 
 		}
 	}
 	fn check_fast_track_schedule(
-		origin: Origin,
+		origin: RuntimeOrigin,
 		_initial_origin: &OriginCaller,
 		_new_delay: BlockNumber,
 	) -> DispatchResult {
 		ensure_root(origin)?;
 		Ok(())
 	}
-	fn check_delay_schedule(origin: Origin, initial_origin: &OriginCaller) -> DispatchResult {
+	fn check_delay_schedule(origin: RuntimeOrigin, initial_origin: &OriginCaller) -> DispatchResult {
 		ensure_root(origin.clone()).or_else(|_| {
 			if origin.caller() == initial_origin {
 				Ok(())
@@ -110,7 +115,7 @@ impl AuthorityConfig<Origin, OriginCaller, BlockNumber> for AuthorityConfigImpl 
 			}
 		})
 	}
-	fn check_cancel_schedule(origin: Origin, initial_origin: &OriginCaller) -> DispatchResult {
+	fn check_cancel_schedule(origin: RuntimeOrigin, initial_origin: &OriginCaller) -> DispatchResult {
 		ensure_root(origin.clone()).or_else(|_| {
 			if origin.caller() == initial_origin {
 				Ok(())
@@ -121,18 +126,18 @@ impl AuthorityConfig<Origin, OriginCaller, BlockNumber> for AuthorityConfigImpl 
 	}
 }
 
-impl AsOriginId<Origin, OriginCaller> for MockAsOriginId {
+impl AsOriginId<RuntimeOrigin, OriginCaller> for MockAsOriginId {
 	fn into_origin(self) -> OriginCaller {
 		match self {
-			MockAsOriginId::Root => Origin::root().caller().clone(),
-			MockAsOriginId::Account1 => Origin::signed(1).caller().clone(),
-			MockAsOriginId::Account2 => Origin::signed(2).caller().clone(),
+			MockAsOriginId::Root => RuntimeOrigin::root().caller().clone(),
+			MockAsOriginId::Account1 => RuntimeOrigin::signed(1).caller().clone(),
+			MockAsOriginId::Account2 => RuntimeOrigin::signed(2).caller().clone(),
 		}
 	}
-	fn check_dispatch_from(&self, origin: Origin) -> DispatchResult {
+	fn check_dispatch_from(&self, origin: RuntimeOrigin) -> DispatchResult {
 		ensure_root(origin.clone()).or_else(|_| {
 			if let OriginCaller::Authority(ref sign) = origin.caller() {
-				if sign.origin == Box::new(Origin::root().caller().clone()) {
+				if sign.origin == Box::new(RuntimeOrigin::root().caller().clone()) {
 					return Ok(());
 				} else {
 					return Err(BadOrigin.into());
@@ -153,12 +158,14 @@ impl AsOriginId<Origin, OriginCaller> for MockAsOriginId {
 	}
 }
 
+impl pallet_root_testing::Config for Runtime {}
+
 impl Config for Runtime {
-	type Event = Event;
-	type Origin = Origin;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type Scheduler = Scheduler;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type AsOriginId = MockAsOriginId;
 	type AuthorityConfig = AuthorityConfigImpl;
 	type WeightInfo = ();
@@ -176,6 +183,8 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Event<T>},
 		Authority: authority::{Pallet, Call, Origin<T>, Event<T>},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
+		Preimage: pallet_preimage::{Pallet, Call, Storage, Event<T>},
+		RootTesting: pallet_root_testing::{Pallet, Call, Storage},
 	}
 );
 

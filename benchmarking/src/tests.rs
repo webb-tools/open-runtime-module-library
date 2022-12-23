@@ -4,7 +4,10 @@
 
 use super::*;
 use frame_benchmarking::account;
-use frame_support::{assert_err, assert_ok, construct_runtime, ensure, traits::Everything};
+use frame_support::{
+	assert_err, assert_ok, construct_runtime, ensure,
+	traits::{ConstU32, Everything},
+};
 use frame_system::RawOrigin;
 use sp_runtime::{
 	testing::{Header, H256},
@@ -49,16 +52,16 @@ pub mod test {
 type AccountId = u128;
 
 impl frame_system::Config for Test {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
 	type BlockWeights = ();
@@ -72,13 +75,13 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl Config for Test {}
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u32, ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, u32, ()>;
 
 construct_runtime!(
 	pub enum Test where
